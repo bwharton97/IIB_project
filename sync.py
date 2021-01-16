@@ -1,9 +1,9 @@
 import time
 import cv2
 
+from pisetup import FRAMERATE
 from process import process_frames
 
-FRAMERATE = 10  # Must match pi_localscript_stream.py, cannot just import this
 STAT_FREQ = 3  # In seconds
 SYNC_DIFFERENCE_LIMIT = 1 / FRAMERATE  # In seconds
 
