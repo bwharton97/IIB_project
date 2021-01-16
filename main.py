@@ -1,25 +1,31 @@
-import video
+import sync
 from calibrate import calibrate_extrinsic
-from pisetup import upload_and_run_picam, PI_IP_ADDRESSES, Pi
+import pisetup
 
 
 def main():
-    pis = []
-    for pi_id in range(len(PI_IP_ADDRESSES)):
-        pi = Pi(pi_id, PI_IP_ADDRESSES[pi_id])
-        pi.write_to_disk()
-        pis.append(pi)
+    pisetup.upload_localscripts()
+    if pisetup.MODE == 'record':
+        pisetup.record()
 
-    try:
-        #calibrate_extrinsic(pis)
-        #video.process_video(pis)
-        pass
-    finally:
-        print("Closing connections")
-        for pi in pis:
-            pi.close_connection()
+    elif pisetup.MODE == 'stream':
+        pis = []
+        for pi_id in range(len(pisetup.PI_IP_ADDRESSES)):
+            pi = pisetup.Pi(pi_id, pisetup.PI_IP_ADDRESSES[pi_id])
+            pis.append(pi)
+
+        try:
+            # calibrate_extrinsic(pis)
+            # sync.process_video(pis)
+            pass
+        finally:
+            print("Closing connections")
+            for pi in pis:
+                pi.close_connection()
+
+    else:
+        print("Mode not recognised, should be either stream or record.")
 
 
 if __name__ == '__main__':
-    upload_and_run_picam()
     main()

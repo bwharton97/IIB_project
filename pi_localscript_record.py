@@ -4,7 +4,7 @@ import picamera
 
 RESOLUTION = (1920, 1080)
 FRAMERATE = 30
-DURATION = 20
+DURATION = 10
 
 server_socket = socket.socket()
 server_socket.bind(('0.0.0.0', 8000))

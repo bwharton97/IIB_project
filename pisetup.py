@@ -4,12 +4,12 @@ import struct
 import subprocess as sp
 import threading
 import time
-
 import cv2
 import numpy as np
 
 PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
 SERVER_IP = '10.42.0.1'
+MODE = 'record' #'stream'
 
 
 def check_time_sync():
@@ -22,29 +22,59 @@ def check_time_sync():
             print("Failed to find Pi{} sync status".format(pi_index))
 
 
-def run_picam(pi_index):
-    #sp.run(['ssh', 'pi@' + PI_IP_ADDRESSES[pi_index], 'python3', 'pi_localscript_stream.py'], capture_output=True)
-    sp.run(['ssh', 'pi@' + PI_IP_ADDRESSES[pi_index], 'python3', 'pi_localscript_record.py'], capture_output=True)
-
-
-def upload_picam():
+def upload_localscripts():
     for pi_index in range(len(PI_IP_ADDRESSES)):
         try:
-            #sp.run(['scp', 'pi_localscript_stream.py', 'pi@' + PI_IP_ADDRESSES[pi_index] + ':'], timeout=3, check=True)
+            sp.run(['scp', 'pi_localscript_stream.py', 'pi@' + PI_IP_ADDRESSES[pi_index] + ':'], timeout=3, check=True)
             sp.run(['scp', 'pi_localscript_record.py', 'pi@' + PI_IP_ADDRESSES[pi_index] + ':'], timeout=3, check=True)
-            print("Successfully pushed picam script to Pi{} at {}".format(pi_index, PI_IP_ADDRESSES[pi_index]))
+            print("Successfully pushed localscripts to Pi{} at {}".format(pi_index, PI_IP_ADDRESSES[pi_index]))
         except:
-            print("WARNING: Pushing picam script to Pi{} at {} failed".format(pi_index, PI_IP_ADDRESSES[pi_index]))
+            print("WARNING: Pushing localscripts script to Pi{} at {} failed".format(pi_index, PI_IP_ADDRESSES[pi_index]))
 
 
-def upload_and_run_picam():
-    upload_picam()
+def start_stream():
     for pi_index in range(len(PI_IP_ADDRESSES)):
-        thread = threading.Thread(target=run_picam, args=[pi_index])
-        thread.start()
+        threading.Thread(target=run_localscript_stream, args=[pi_index]).start()
 
     # Allow time for Pis to create the socket connection
     time.sleep(0.8)
+
+
+def run_localscript_stream(pi_id):
+    sp.run(['ssh', 'pi@' + PI_IP_ADDRESSES[pi_id], 'python3', 'pi_localscript_stream.py'], capture_output=True)
+
+
+def record():
+    for pi_id in range(len(PI_IP_ADDRESSES)):
+        threading.Thread(target=run_localscript_record, name='record-Pi'+str(pi_id), args=[pi_id]).start()
+
+    # Allow time for Pis to create the socket connection
+    time.sleep(0.8)
+
+    writing_threads = []
+    for pi_id in range(len(PI_IP_ADDRESSES)):
+        thread = threading.Thread(target=connect_and_write_to_disk, name='write-Pi'+str(pi_id), args=[pi_id])
+        thread.start()
+        writing_threads.append(thread)
+
+    # Wait for writing threads to finish
+    for thread in writing_threads:
+        thread.join()
+
+
+def run_localscript_record(pi_id):
+    print("Commencing recording on Pi{}".format(pi_id))
+    sp.run(['ssh', 'pi@' + PI_IP_ADDRESSES[pi_id], 'python3', 'pi_localscript_record.py'], capture_output=True)
+
+
+def connect_and_write_to_disk(pi_id):
+    pi_socket = socket.socket()
+    pi_socket.connect((PI_IP_ADDRESSES[pi_id], 8000))
+    connection = pi_socket.makefile('rb')
+    print("Successfully established connection with Pi{}, writing file to disk".format(pi_id))
+    output_file = open("recording_pi{}.h264".format(pi_id), 'wb')
+    output_file.write(connection.read())
+    print("Writing file complete for Pi{}".format(pi_id))
 
 
 class Pi:
@@ -52,6 +82,8 @@ class Pi:
         # Establish connection
         self.id = pi_id
         self.ip_address = ip_address
+        self.socket = socket.socket()
+        self.connection = None
         self.establish_connection()
 
         try:
@@ -65,12 +97,6 @@ class Pi:
         self.rvec = None
         self.tvec = None
         self.P = None
-
-    def establish_connection(self):
-        self.socket = socket.socket()
-        self.socket.connect((self.ip_address, 8000))
-        self.connection = self.socket.makefile('rb')
-        print("Successfully established connection with Pi{}".format(self.id))
 
     def update_cam_mtx(self):
         """Takes one frame from camera to determine whether there is binning"""
@@ -98,12 +124,10 @@ class Pi:
         frame = cv2.rotate(frame, cv2.ROTATE_180) # Rotate 180 deg while camera is upside down
         return frame, timestamp, quick_read
 
-    def write_to_disk(self):
-        """Records entire output of stream to disk"""
-        print("Writing file")
-        output_file = open("recording_pi{}.h264".format(self.id), 'wb')
-        output_file.write(self.connection.read())
-        print("Writing file complete")
+    def establish_connection(self):
+        self.socket.connect((self.ip_address, 8000))
+        self.connection = self.socket.makefile('rb')
+        print("Successfully established connection with Pi{}".format(self.id))
 
     def close_connection(self):
         np.save(open('cam_mtx_' + str(self.id), 'wb'), self.cam_mtx)
