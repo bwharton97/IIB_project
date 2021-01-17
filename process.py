@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 
 
+def test_process_frames(pis, frames):
+    processed_frame = np.concatenate((frames[0], frames[1]), axis=1)
+    return processed_frame
+
 def process_frames(pis, frames):
     spot_locations = []
     for i in range(len(frames)):

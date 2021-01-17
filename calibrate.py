@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import time
-import sync
+import video
 
 CHESSBOARD_SIZE = 2.42  # real-life size of a square in cm
 
@@ -11,7 +11,7 @@ def calibrate_extrinsic(pis):
         display_frames = []
 
         # Get and show new frames
-        frames, frame_drop, both_quick_read, avg_latency = sync.get_synced_frames(pis)
+        frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
 
         # Search for chessboards and attempt to locate them
         all_found = True

@@ -5,11 +5,8 @@ import struct
 import time
 import picamera
 
-# RESOLUTION = (1640,922)
-# RESOLUTION = (1920,1080)
-RESOLUTION = (620, 480)
-# RESOLUTION = (1640,922)
-FRAMERATE = 8
+from constants import RESOLUTION, FRAMERATE, MODE
+DURATION = 10
 
 
 class SplitFrames(object):
@@ -46,11 +43,13 @@ server_socket.listen(0)
 print("Pi: Listening for connections")
 connection = server_socket.accept()[0].makefile('wb')
 print("Pi: Connection accepted")
-with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
+
+if MODE == 'stream':
     try:
-        output = SplitFrames(connection)
-        camera.start_recording(output, format='mjpeg')
-        camera.wait_recording(24 * 60 * 60)
+        with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
+            output = SplitFrames(connection)
+            camera.start_recording(output, format='mjpeg')
+            camera.wait_recording(24 * 60 * 60)
     except (BrokenPipeError, ConnectionResetError):
         # Interrupted somehow
         print("Pi: Interrupted")
@@ -59,3 +58,18 @@ with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
         except:
             pass
     server_socket.close()
+
+elif MODE == 'record':
+    try:
+        with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
+            timestamp = time.time()
+            connection.write(struct.pack('<d', timestamp))
+            camera.start_recording(connection, format='h264')
+            camera.wait_recording(DURATION)
+            camera.stop_recording()
+    finally:
+        connection.close()
+        server_socket.close()
+
+else:
+    raise RuntimeError("Mode not recognised")
