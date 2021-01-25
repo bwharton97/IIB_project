@@ -1,4 +1,4 @@
-import video
+import video, calibrate
 import pisetup
 
 
@@ -10,25 +10,27 @@ def main():
         pis.append(pi)
         pi.upload_localscripts()  # Only necessary during development
 
-    if pisetup.MODE == 'record':
-        #pisetup.record_from_pis(pis)
-        video.process_recording(pis)
-        video.play_processed_recording()
+    try:
+        if pisetup.MODE == 'record':
+            #pisetup.record_from_pis(pis)
+            calibrate.calibrate_extrinsic_correspondences(pis)
+            #video.process_recording(pis)
+            #video.play_processed_recording()
 
-    elif pisetup.MODE == 'stream':
-        pisetup.start_stream(pis)
-
-        try:
-            # calibrate_extrinsic(pis)
+        elif pisetup.MODE == 'stream':
+            pisetup.start_stream(pis)
+            calibrate.calibrate_extrinsic_chessboard(pis)
             video.process_and_display_stream(pis)
-            pass
-        finally:
-            print("Closing connections")
-            for pi in pis:
-                pi.connection.close()
 
-    else:
-        raise RuntimeError("Mode not recognised")
+        else:
+            raise RuntimeError("Mode not recognised")
+
+    finally:
+        print("Saving parameters and closing connections")
+        for pi in pis:
+            pi.save_extrinsic_params()
+            if pi.connection is not None:
+                pi.connection.close()
 
 
 if __name__ == '__main__':

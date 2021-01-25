@@ -5,7 +5,87 @@ import video
 
 CHESSBOARD_SIZE = 2.42  # real-life size of a square in cm
 
-def calibrate_extrinsic(pis):
+
+def calibrate_extrinsic_correspondences(pis):
+    def click_event(event, x, y, flags, param):
+        nonlocal drawing_frame, correspondences, colours
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if x < drawing_frame.shape[1] / 2:
+                # Point selected on Pi0 image
+                id = 0
+                sub_x, sub_y = x, y
+            else:
+                id = 1
+                sub_x, sub_y = x - drawing_frame.shape[1]/2, y
+
+            n = len(correspondences[id])
+            if n == len(min(correspondences, key=len)):
+                correspondences[id].append([sub_x, sub_y])
+                cv2.drawMarker(drawing_frame, (x, y), colours[n], cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=1)
+            else:
+                print("Please select matching correspondence on other image")
+
+    frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
+    original_frame = np.concatenate((frames[0], frames[1]), axis=1)
+    drawing_frame = original_frame.copy()
+    correspondences = [[], []]  # correpondences[0] is a vector of vectors for Pi0
+    num_correspondences = 11 #7
+    colours = np.random.rand(num_correspondences, 3) * 255
+    real_distance = 30
+    #real_distance = float(input("Enter distance in cm between the first two points you select:"))
+    cv2.namedWindow('Select correspondences')
+    cv2.setMouseCallback('Select correspondences', click_event)
+
+    while len(min(correspondences, key=len)) < num_correspondences:
+        cv2.imshow('Select correspondences', drawing_frame)
+        key = cv2.waitKey(20) & 0xFF
+        if key == ord('q'):
+            # Quit
+            break
+        elif key == ord('n'):
+            # New frame
+            frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
+            original_frame = np.concatenate((frames[0], frames[1]), axis=1)
+            drawing_frame = original_frame.copy()
+            correspondences = [[], []]
+        elif key == ord('c'):
+            # Clear correspondences
+            drawing_frame = original_frame.copy()
+            correspondences = [[], []]
+
+    # This part assumes both cameras have the same camera matrix. Use cv2.undistortPoints to improve
+    points = np.array(correspondences)
+    E, E_mask = cv2.findEssentialMat(points[0], points[1], pis[0].cam_mtx, mask=[[1]*num_correspondences])
+    retval, R, tvec, pose_mask = cv2.recoverPose(E, points[0], points[1], pis[0].cam_mtx, mask=E_mask)
+    rvec, jac = cv2.Rodrigues(R)
+    pis[0].rvec = np.array([[0.0], [0.0], [0.0]])
+    pis[0].tvec = np.array([[0.0], [0.0], [0.0]])
+    pis[0].update_derived_params()
+    pis[1].rvec = rvec
+    pis[1].tvec = tvec
+    pis[1].update_derived_params()
+
+    print("E matrix points mask:\n", E_mask)
+    print("Pose mask\n", pose_mask)
+    print("Essential matrix found:\n", E)
+    print("Normalised tvec:\n", tvec)
+    print("rvec:\n", rvec)
+
+    points4D = cv2.triangulatePoints(pis[0].P, pis[1].P, points[0].T, points[1].T).T
+    points3D = cv2.convertPointsFromHomogeneous(points4D)
+    old_distance = np.linalg.norm(points3D[0,0]-points3D[1,0])
+    factor = real_distance/old_distance
+    points3D *= factor
+    for pi in pis:
+        pi.tvec *= factor
+        pi.update_derived_params()
+    print(points3D)
+    print("Real tvec:\n", pis[1].tvec)
+    print("Distance between cameras:", np.linalg.norm(pis[1].tvec))
+
+
+def calibrate_extrinsic_chessboard(pis):
     all_found = False
     while not all_found:
         display_frames = []
@@ -23,12 +103,9 @@ def calibrate_extrinsic(pis):
                                                               pis[pi_index].cam_mtx, distCoeffs=None)
                 if ret:
                     # Calculate projection matrices too
-                    R, jac = cv2.Rodrigues(rvec)
-                    T = np.concatenate((R, tvec), axis=1)
-                    P = np.matmul(pis[pi_index].cam_mtx, T)
                     pis[pi_index].rvec = rvec
                     pis[pi_index].tvec = tvec
-                    pis[pi_index].P = P
+                    pis[pi_index].update_derived_params()
                 else:
                     print("Could not solvePnP, no idea why")
             else:

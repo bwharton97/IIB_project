@@ -31,20 +31,34 @@ class Pi:
                                      [0, 2714, RESOLUTION[1] / 2],
                                      [0, 0, 1]])
 
-        """
         try:
-            self.cam_mtx = np.load(open('cam_mtx_' + str(self.id), 'rb'))
+            # Extrinsic camera parameters
+            self.rvec = np.load(open('rvec_' + str(self.id), 'rb'))
+            self.tvec = np.load(open('rvec_' + str(self.id), 'rb'))
+            self.update_derived_params()
         except (FileNotFoundError, ValueError):
-            self.cam_mtx = None
-            print('WARNING: Cannot load camera matrix for Pi{}. Please recalibrate intrinsic parameters'.format(pi_id))
-        """
+            # Extrinsic params
+            self.rvec = None
+            self.tvec = None
+            # Derived parameters
+            self.P = None
+            self.E = None
+            print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(pi_id))
 
-        # Extrinsic camera parameters
-        self.rvec = None
-        self.tvec = None
-        self.P = None
+    def save_extrinsic_params(self):
+        np.save(open('rvec_' + str(self.id), 'wb'), self.rvec)
+        np.save(open('tvec_' + str(self.id), 'wb'), self.tvec)
 
-        # np.save(open('cam_mtx_' + str(self.id), 'wb'), self.cam_mtx)  # Might be useful later
+    def update_derived_params(self):
+        """Uses rvec and tvec to calculate P and E"""
+        R, jac = cv2.Rodrigues(self.rvec)
+        Pr = np.concatenate((R, self.tvec), axis=1)
+        self.P = np.matmul(self.cam_mtx, Pr)
+        # The following is the essential matrix compared to origin of coordinate system
+        Tx = np.array([[0, -self.tvec[2,0], self.tvec[1,0]],
+                       [self.tvec[2,0], 0, -self.tvec[0,0]],
+                       [-self.tvec[1,0], self.tvec[0,0], 0]])
+        self.E = np.matmul(Tx, R)
 
     def check_time_sync(self):
         print('\nAttempting to determine Pi{} sync status:'.format(self.id))
@@ -116,6 +130,8 @@ class Pi:
             #                                                                           (time3-time2)*FRAMERATE*100))
             quick_read = time2-time1 < 0.0003  # If read instant then buffer has data waiting, this is bad
         elif MODE == 'record':
+            if self.capture is None:
+                self.load_recording_from_disk()
             ret, frame = self.capture.read()
             timestamp = self.start_timestamp + self.current_pos
             self.current_pos += 1/FRAMERATE

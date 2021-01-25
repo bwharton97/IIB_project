@@ -74,8 +74,7 @@ def get_synced_frames(pis):
 
 def process_recording(pis):
     for pi in pis:
-        if pi.capture is None:
-            pi.load_recording_from_disk()
+        pi.load_recording_from_disk()
     print("Processing from Pi objects and writing to disk...")
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     frames, frame_drop, both_quick_read, avg_latency = get_synced_frames(pis)
