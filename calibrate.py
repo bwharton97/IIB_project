@@ -7,7 +7,7 @@ CHESSBOARD_SIZE = 2.42  # real-life size of a square in cm
 
 
 def calibrate_extrinsic_correspondences(pis):
-    np.set_printoptions(formatter={'float': lambda x: "{0:0.1f}".format(x)})
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
 
     def click_event(event, x, y, flags, param):
         nonlocal original_frame, drawing_frame, correspondences, order_added, colours
@@ -45,52 +45,58 @@ def calibrate_extrinsic_correspondences(pis):
     original_frame = np.concatenate((frames[0], frames[1]), axis=1)
     drawing_frame = original_frame.copy()
     correspondences, order_added = [[], []], []  # correpondences[0] is a list of lists for Pi0
-    num_correspondences = 7  # 7 is theoretical minimum
+    num_correspondences = 10  # 7 is theoretical minimum
     colours = np.random.rand(num_correspondences, 3) * 255
     print("Please select correspondances. Controls: u = undo, n = next frame, c = clear frame, q = quit")
     # real_distance = float(input("Enter distance in cm between the first two points you select:"))
     real_distance = 30
-    cv2.namedWindow('Select correspondences')
-    cv2.setMouseCallback('Select correspondences', click_event)
 
-    while len(min(correspondences, key=len)) < num_correspondences:
-        cv2.imshow('Select correspondences', drawing_frame)
-        key = cv2.waitKey(20) & 0xFF
-        if key == ord('q'):
-            # Quit
-            break
-        elif key == ord('n'):
-            # New frame
-            frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
-            original_frame = np.concatenate((frames[0], frames[1]), axis=1)
-            drawing_frame = original_frame.copy()
-            correspondences, order_added = [[], []], []
-        elif key == ord('c'):
-            # Clear correspondences
-            drawing_frame = original_frame.copy()
-            correspondences, order_added = [[], []], []
-        elif key == ord('u'):
-            # Undo last correspondence
-            try:
-                correspondences[order_added[-1]].pop()
-                order_added.pop()
+    if True:
+        cv2.namedWindow('Select correspondences')
+        cv2.setMouseCallback('Select correspondences', click_event)
+        while len(min(correspondences, key=len)) < num_correspondences:
+            cv2.imshow('Select correspondences', drawing_frame)
+            key = cv2.waitKey(20) & 0xFF
+            if key == ord('q'):
+                # Quit
+                break
+            elif key == ord('n'):
+                # New frame
+                frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
+                original_frame = np.concatenate((frames[0], frames[1]), axis=1)
                 drawing_frame = original_frame.copy()
-                drawing_frame = draw_correspondence_markers(original_frame, correspondences, colours)
-            except IndexError:
-                pass
-    cv2.setMouseCallback('Select correspondences', lambda *args: None)
+                correspondences, order_added = [[], []], []
+            elif key == ord('c'):
+                # Clear correspondences
+                drawing_frame = original_frame.copy()
+                correspondences, order_added = [[], []], []
+            elif key == ord('u'):
+                # Undo last correspondence
+                try:
+                    correspondences[order_added[-1]].pop()
+                    order_added.pop()
+                    drawing_frame = original_frame.copy()
+                    drawing_frame = draw_correspondence_markers(original_frame, correspondences, colours)
+                except IndexError:
+                    pass
+        cv2.setMouseCallback('Select correspondences', lambda *args: None)
+    else:
+        correspondences = [[(639, 351), (1575, 345), (882, 691), (300, 659), (387, 535), (518, 214), (241, 36), (1433, 560), (1307, 837), (1495, 855)],
+                           [(404, 320), (1287, 272), (530, 626), (482, 619), (562, 505), (674, 196), (404, 44), (1609, 514), (642, 740), (802, 759)]]
 
     # Calculate external params from correspondences
     # This part assumes both cameras have the same camera matrix. Use cv2.undistortPoints to improve
     points = np.array(correspondences).astype(float)
     print("Correspondences:\n", correspondences)
-    E, E_mask = cv2.findEssentialMat(points[0], points[1], pis[0].cam_mtx, method=cv2.RANSAC, prob=0.99, threshold=100)
-    retval, R, tvec, pose_mask = cv2.recoverPose(E, points[0], points[1], pis[0].cam_mtx, mask=E_mask)
+    F, F_mask = cv2.findFundamentalMat(points[0], points[1], method=cv2.FM_8POINT)
+    if not np.all((F_mask == 1)):
+        print("Warning: some correspondences were rejected as outliers. Mask:\n", F_mask)
+    E = np.matmul(np.matmul(pis[0].K.T, F), pis[0].K)
+    retval, R, tvec, pose_mask = cv2.recoverPose(E, points[0], points[1], pis[0].K)
     rvec, jac = cv2.Rodrigues(R)
+
     pis[0].set_extrinsic_params(np.array([[0.0], [0.0], [0.0]]), np.array([[0.0], [0.0], [0.0]]))
     pis[1].set_extrinsic_params(rvec, tvec)
-    if not np.all((E_mask == 1)):
-        print("Warning: some correspondences were rejected as outliers. Mask:\n", E_mask)
 
     # Calculate 3D position of correspondences and calibrate for scale using fist two points
     points4D = cv2.triangulatePoints(pis[0].P, pis[1].P, points[0].T, points[1].T).T
@@ -110,11 +116,11 @@ def calibrate_extrinsic_correspondences(pis):
             axis = point[0] + np.array([[0, 0, 0], [10, 0, 0], [0, 10, 0], [0, 0, 10]])
 
             # For pi0
-            img_points, jac = cv2.projectPoints(axis, pis[0].rvec, pis[0].tvec, pis[0].cam_mtx, distCoeffs=None)
+            img_points, jac = cv2.projectPoints(axis, pis[0].rvec, pis[0].tvec, pis[0].K, distCoeffs=None)
             draw_axes_as_lines(drawing_frame, img_points)
 
             # For pi1
-            img_points, jac = cv2.projectPoints(axis, pis[1].rvec, pis[1].tvec, pis[1].cam_mtx, distCoeffs=None)
+            img_points, jac = cv2.projectPoints(axis, pis[1].rvec, pis[1].tvec, pis[1].K, distCoeffs=None)
             img_points += np.array([drawing_frame.shape[1]//2, 0])
             draw_axes_as_lines(drawing_frame, img_points)
 
@@ -144,7 +150,7 @@ def calibrate_extrinsic_chessboard(pis):
             if ret:
                 display_frames.append(frame_with_corners)
                 ret, rvec, tvec, inliers = cv2.solvePnPRansac(objpoints, imgpoints,
-                                                              pis[pi_index].cam_mtx, distCoeffs=None)
+                                                              pis[pi_index].K, distCoeffs=None)
                 if ret:
                     # Calculate projection matrices too
                     pis[pi_index].rvec = rvec
@@ -232,4 +238,4 @@ def calibrate_intrinsic(pi):
     print("cam_mtx_list:", cam_mtx_list)
     cam_mtx_median = np.median(cam_mtx_list, axis=0)
     print("cam_mtx_median:", cam_mtx_median)
-    pi.cam_mtx = cam_mtx_median
+    pi.K = cam_mtx_median

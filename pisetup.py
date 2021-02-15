@@ -24,13 +24,13 @@ class Pi:
 
         if RESOLUTION[0] <= 1640:
             # Binning
-            self.cam_mtx = np.array([[2714 / 2, 0, RESOLUTION[0] / 2],
-                                     [0, 2714 / 2, RESOLUTION[1] / 2],
-                                     [0, 0, 1]])
+            self.K = np.array([[2714 / 2, 0, RESOLUTION[0] / 2],
+                               [0, 2714 / 2, RESOLUTION[1] / 2],
+                               [0, 0, 1]])
         else:
-            self.cam_mtx = np.array([[2714, 0, RESOLUTION[0] / 2],
-                                     [0, 2714, RESOLUTION[1] / 2],
-                                     [0, 0, 1]])
+            self.K = np.array([[2714, 0, RESOLUTION[0] / 2],
+                               [0, 2714, RESOLUTION[1] / 2],
+                               [0, 0, 1]])
 
         # Extrinsic camera parameters rvec, tvec, P and E
         self.rvec, self.tvec, self.P, self.E = None, None, None, None
@@ -52,7 +52,7 @@ class Pi:
         # Update derived params P and E
         R, jac = cv2.Rodrigues(self.rvec)
         Pr = np.concatenate((R, self.tvec), axis=1)
-        self.P = np.matmul(self.cam_mtx, Pr)
+        self.P = np.matmul(self.K, Pr)
         # The following is the essential matrix compared to origin of coordinate system
         Tx = np.array([[0, -self.tvec[2, 0], self.tvec[1, 0]],
                        [self.tvec[2, 0], 0, -self.tvec[0, 0]],

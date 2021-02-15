@@ -12,7 +12,7 @@ def main():
 
     try:
         if pisetup.MODE == 'record':
-            #pisetup.record_from_pis(pis)
+            pisetup.record_from_pis(pis)
             calibrate.calibrate_extrinsic_correspondences(pis)
             #video.process_recording(pis)
             #video.play_processed_recording()
