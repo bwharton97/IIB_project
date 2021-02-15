@@ -7,8 +7,10 @@ CHESSBOARD_SIZE = 2.42  # real-life size of a square in cm
 
 
 def calibrate_extrinsic_correspondences(pis):
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.1f}".format(x)})
+
     def click_event(event, x, y, flags, param):
-        nonlocal drawing_frame, correspondences, colours
+        nonlocal original_frame, drawing_frame, correspondences, order_added, colours
 
         if event == cv2.EVENT_LBUTTONDOWN:
             if x < drawing_frame.shape[1] / 2:
@@ -17,23 +19,37 @@ def calibrate_extrinsic_correspondences(pis):
                 sub_x, sub_y = x, y
             else:
                 id = 1
-                sub_x, sub_y = x - drawing_frame.shape[1]/2, y
+                sub_x, sub_y = x - drawing_frame.shape[1]//2, y
 
             n = len(correspondences[id])
             if n == len(min(correspondences, key=len)):
-                correspondences[id].append([sub_x, sub_y])
-                cv2.drawMarker(drawing_frame, (x, y), colours[n], cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=1)
+                correspondences[id].append((sub_x, sub_y))
+                order_added.append(id)
+                drawing_frame = draw_correspondence_markers(original_frame, correspondences, colours)
             else:
                 print("Please select matching correspondence on other image")
+
+    def draw_correspondence_markers(original_frame, correspondences, colours):
+        """Adds markers for each of these correspondences to drawing_frame"""
+        drawing_frame = original_frame.copy()
+        for i in range(len(correspondences[0])):
+            cv2.drawMarker(drawing_frame, correspondences[0][i],
+                           colours[i], cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=2)
+        for i in range(len(correspondences[1])):
+            cv2.drawMarker(drawing_frame,
+                           (correspondences[1][i][0] + drawing_frame.shape[1]//2, correspondences[1][i][1]),
+                           colours[i], cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=2)
+        return drawing_frame
 
     frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
     original_frame = np.concatenate((frames[0], frames[1]), axis=1)
     drawing_frame = original_frame.copy()
-    correspondences = [[], []]  # correpondences[0] is a vector of vectors for Pi0
-    num_correspondences = 11 #7
+    correspondences, order_added = [[], []], []  # correpondences[0] is a list of lists for Pi0
+    num_correspondences = 7  # 7 is theoretical minimum
     colours = np.random.rand(num_correspondences, 3) * 255
+    print("Please select correspondances. Controls: u = undo, n = next frame, c = clear frame, q = quit")
+    # real_distance = float(input("Enter distance in cm between the first two points you select:"))
     real_distance = 30
-    #real_distance = float(input("Enter distance in cm between the first two points you select:"))
     cv2.namedWindow('Select correspondences')
     cv2.setMouseCallback('Select correspondences', click_event)
 
@@ -48,41 +64,69 @@ def calibrate_extrinsic_correspondences(pis):
             frames, frame_drop, both_quick_read, avg_latency = video.get_synced_frames(pis)
             original_frame = np.concatenate((frames[0], frames[1]), axis=1)
             drawing_frame = original_frame.copy()
-            correspondences = [[], []]
+            correspondences, order_added = [[], []], []
         elif key == ord('c'):
             # Clear correspondences
             drawing_frame = original_frame.copy()
-            correspondences = [[], []]
+            correspondences, order_added = [[], []], []
+        elif key == ord('u'):
+            # Undo last correspondence
+            try:
+                correspondences[order_added[-1]].pop()
+                order_added.pop()
+                drawing_frame = original_frame.copy()
+                drawing_frame = draw_correspondence_markers(original_frame, correspondences, colours)
+            except IndexError:
+                pass
+    cv2.setMouseCallback('Select correspondences', lambda *args: None)
 
+    # Calculate external params from correspondences
     # This part assumes both cameras have the same camera matrix. Use cv2.undistortPoints to improve
-    points = np.array(correspondences)
-    E, E_mask = cv2.findEssentialMat(points[0], points[1], pis[0].cam_mtx, mask=[[1]*num_correspondences])
+    points = np.array(correspondences).astype(float)
+    print("Correspondences:\n", correspondences)
+    E, E_mask = cv2.findEssentialMat(points[0], points[1], pis[0].cam_mtx, method=cv2.RANSAC, prob=0.99, threshold=100)
     retval, R, tvec, pose_mask = cv2.recoverPose(E, points[0], points[1], pis[0].cam_mtx, mask=E_mask)
     rvec, jac = cv2.Rodrigues(R)
-    pis[0].rvec = np.array([[0.0], [0.0], [0.0]])
-    pis[0].tvec = np.array([[0.0], [0.0], [0.0]])
-    pis[0].update_derived_params()
-    pis[1].rvec = rvec
-    pis[1].tvec = tvec
-    pis[1].update_derived_params()
+    pis[0].set_extrinsic_params(np.array([[0.0], [0.0], [0.0]]), np.array([[0.0], [0.0], [0.0]]))
+    pis[1].set_extrinsic_params(rvec, tvec)
+    if not np.all((E_mask == 1)):
+        print("Warning: some correspondences were rejected as outliers. Mask:\n", E_mask)
 
-    print("E matrix points mask:\n", E_mask)
-    print("Pose mask\n", pose_mask)
-    print("Essential matrix found:\n", E)
-    print("Normalised tvec:\n", tvec)
-    print("rvec:\n", rvec)
-
+    # Calculate 3D position of correspondences and calibrate for scale using fist two points
     points4D = cv2.triangulatePoints(pis[0].P, pis[1].P, points[0].T, points[1].T).T
     points3D = cv2.convertPointsFromHomogeneous(points4D)
-    old_distance = np.linalg.norm(points3D[0,0]-points3D[1,0])
+    old_distance = np.linalg.norm(points3D[0, 0]-points3D[1, 0])
     factor = real_distance/old_distance
     points3D *= factor
     for pi in pis:
-        pi.tvec *= factor
-        pi.update_derived_params()
-    print(points3D)
+        new_tvec = pi.tvec * factor
+        pi.set_extrinsic_params(pi.rvec, new_tvec)
+    print("Correspondences in 3D:\n", points3D)
     print("Real tvec:\n", pis[1].tvec)
     print("Distance between cameras:", np.linalg.norm(pis[1].tvec))
+
+    def draw_axes(drawing_frame, points3D):
+        for point in points3D:
+            axis = point[0] + np.array([[0, 0, 0], [10, 0, 0], [0, 10, 0], [0, 0, 10]])
+
+            # For pi0
+            img_points, jac = cv2.projectPoints(axis, pis[0].rvec, pis[0].tvec, pis[0].cam_mtx, distCoeffs=None)
+            draw_axes_as_lines(drawing_frame, img_points)
+
+            # For pi1
+            img_points, jac = cv2.projectPoints(axis, pis[1].rvec, pis[1].tvec, pis[1].cam_mtx, distCoeffs=None)
+            img_points += np.array([drawing_frame.shape[1]//2, 0])
+            draw_axes_as_lines(drawing_frame, img_points)
+
+    def draw_axes_as_lines(drawing_frame, img_points):
+        img_points = img_points.astype(int)
+        drawing_frame = cv2.line(drawing_frame, tuple(img_points[0, 0]), tuple(img_points[1, 0]), (255, 0, 0), 2)
+        drawing_frame = cv2.line(drawing_frame, tuple(img_points[0, 0]), tuple(img_points[2, 0]), (0, 255, 0), 2)
+        drawing_frame = cv2.line(drawing_frame, tuple(img_points[0, 0]), tuple(img_points[3, 0]), (0, 0, 255), 2)
+
+    draw_axes(drawing_frame, points3D)
+    cv2.imshow('Select correspondences', drawing_frame)
+    cv2.waitKey(0)
 
 
 def calibrate_extrinsic_chessboard(pis):

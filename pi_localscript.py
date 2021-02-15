@@ -1,4 +1,4 @@
-""" This script will be pushed and run remotely on the pi."""
+""" This script along with constants.py will be pushed and run remotely on the pi."""
 import io
 import socket
 import struct

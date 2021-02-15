@@ -12,6 +12,7 @@ from constants import RESOLUTION, FRAMERATE, MODE
 PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
 SERVER_IP = '10.42.0.1'
 
+
 class Pi:
     def __init__(self, pi_id, ip_address):
         self.id = pi_id
@@ -31,33 +32,31 @@ class Pi:
                                      [0, 2714, RESOLUTION[1] / 2],
                                      [0, 0, 1]])
 
+        # Extrinsic camera parameters rvec, tvec, P and E
+        self.rvec, self.tvec, self.P, self.E = None, None, None, None
         try:
-            # Extrinsic camera parameters
-            self.rvec = np.load(open('rvec_' + str(self.id), 'rb'))
-            self.tvec = np.load(open('rvec_' + str(self.id), 'rb'))
-            self.update_derived_params()
+            rvec = np.load(open('rvec_' + str(self.id), 'rb'))
+            tvec = np.load(open('rvec_' + str(self.id), 'rb'))
+            self.set_extrinsic_params(rvec, tvec)
         except (FileNotFoundError, ValueError):
-            # Extrinsic params
-            self.rvec = None
-            self.tvec = None
-            # Derived parameters
-            self.P = None
-            self.E = None
             print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(pi_id))
 
     def save_extrinsic_params(self):
         np.save(open('rvec_' + str(self.id), 'wb'), self.rvec)
         np.save(open('tvec_' + str(self.id), 'wb'), self.tvec)
 
-    def update_derived_params(self):
-        """Uses rvec and tvec to calculate P and E"""
+    def set_extrinsic_params(self, rvec, tvec):
+        self.rvec = rvec
+        self.tvec = tvec
+
+        # Update derived params P and E
         R, jac = cv2.Rodrigues(self.rvec)
         Pr = np.concatenate((R, self.tvec), axis=1)
         self.P = np.matmul(self.cam_mtx, Pr)
         # The following is the essential matrix compared to origin of coordinate system
-        Tx = np.array([[0, -self.tvec[2,0], self.tvec[1,0]],
-                       [self.tvec[2,0], 0, -self.tvec[0,0]],
-                       [-self.tvec[1,0], self.tvec[0,0], 0]])
+        Tx = np.array([[0, -self.tvec[2, 0], self.tvec[1, 0]],
+                       [self.tvec[2, 0], 0, -self.tvec[0, 0]],
+                       [-self.tvec[1, 0], self.tvec[0, 0], 0]])
         self.E = np.matmul(Tx, R)
 
     def check_time_sync(self):
@@ -167,5 +166,5 @@ def start_stream(pis):
 
 if __name__ == '__main__':
     for pi_id in range(len(PI_IP_ADDRESSES)):
-        pi = Pi(pi_id, MODE, PI_IP_ADDRESSES[pi_id])
+        pi = Pi(pi_id, PI_IP_ADDRESSES[pi_id])
         pi.check_time_sync()
