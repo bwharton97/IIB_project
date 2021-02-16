@@ -1,3 +1,4 @@
+"""This module contains classes for each Pi and also the combined PiSystem, covering communication and camera fns."""
 import socket
 import struct
 import subprocess as sp
@@ -8,14 +9,17 @@ import cv2
 import numpy as np
 
 from constants import RESOLUTION, FRAMERATE, MODE
+from frame import SingleViewFrame, MultiViewFrame
 
-PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
-SERVER_IP = '10.42.0.1'
+if MODE == 'stream':
+    SYNC_DIFFERENCE_LIMIT = 1 / FRAMERATE  # In seconds
+else:
+    SYNC_DIFFERENCE_LIMIT = 0.5 / FRAMERATE  # In seconds
 
 
 class Pi:
-    def __init__(self, pi_id, ip_address):
-        self.id = pi_id
+    def __init__(self, id, ip_address):
+        self.id = id
         self.ip_address = ip_address
         self.connection = None
         self.capture = None
@@ -35,15 +39,16 @@ class Pi:
         # Extrinsic camera parameters rvec, tvec, P and E
         self.rvec, self.tvec, self.P, self.E = None, None, None, None
         try:
-            rvec = np.load(open('rvec_' + str(self.id), 'rb'))
-            tvec = np.load(open('rvec_' + str(self.id), 'rb'))
+            # Check this is actually doing its job
+            rvec = np.load('camera_params/rvec_{}.npy'.format(str(self.id)))
+            tvec = np.load('camera_params/tvec_{}.npy'.format(str(self.id)))
             self.set_extrinsic_params(rvec, tvec)
         except (FileNotFoundError, ValueError):
-            print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(pi_id))
+            print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(id))
 
     def save_extrinsic_params(self):
-        np.save(open('rvec_' + str(self.id), 'wb'), self.rvec)
-        np.save(open('tvec_' + str(self.id), 'wb'), self.tvec)
+        np.save('camera_params/rvec_{}.npy'.format(str(self.id)), self.rvec)
+        np.save('camera_params/tvec_{}.npy'.format(str(self.id)), self.tvec)
 
     def set_extrinsic_params(self, rvec, tvec):
         self.rvec = rvec
@@ -92,8 +97,6 @@ class Pi:
         print('Recording received. Writing file {} to disk'.format(filename))
         output_file = open(filename, 'wb')
         output_file.write(recording_file)
-        self.capture = cv2.VideoCapture(filename)
-        self.current_pos = 0
 
     def record(self):
         """This method will hang until entire recording is finished."""
@@ -111,8 +114,8 @@ class Pi:
         filenames.sort(reverse=True)
         most_recent_filename = filenames[0]
         print('Loading most recent file', most_recent_filename, 'from disk')
-        self.start_timestamp = float(most_recent_filename[25:-5])
         self.capture = cv2.VideoCapture(most_recent_filename)
+        self.start_timestamp = float(most_recent_filename[25:-5])
         self.current_pos = 0
         print('Loading file complete for Pi{}'.format(self.id))
 
@@ -132,6 +135,8 @@ class Pi:
             if self.capture is None:
                 self.load_recording_from_disk()
             ret, frame = self.capture.read()
+            if not ret:  # End of video
+                return None
             timestamp = self.start_timestamp + self.current_pos
             self.current_pos += 1/FRAMERATE
             quick_read = False  # Not relevant for recording
@@ -139,32 +144,75 @@ class Pi:
             raise RuntimeError('Mode not recognised')
 
         frame = cv2.rotate(frame, cv2.ROTATE_180)  # Rotate 180 deg while camera is upside down
-        return frame, timestamp, quick_read
+        return SingleViewFrame(frame, self, timestamp, quick_read)
 
 
-def record_from_pis(pis):
-    # This must be outside the Pi class because it records from all Pis simultaneously
-    recording_threads = []
-    for pi in pis:
-        thread = threading.Thread(target=pi.record, name='record-Pi' + str(pi.id))
-        thread.start()
-        recording_threads.append(thread)
-    # Wait for recording threads to finish
-    for thread in recording_threads:
-        thread.join()
+class PiSystem:
+    def __init__(self, pi_ip_addresses):
+        self.pis = []
+        for id in range(len(pi_ip_addresses)):
+            pi = Pi(id, pi_ip_addresses[id])
+            self.pis.append(pi)
 
+    def upload_localscripts(self):
+        for pi in self.pis:
+            pi.upload_localscripts()
 
-def start_stream(pis):
-    # This must be outside the Pi class because it streams from all Pis simultaneously
-    for pi in pis:
-        threading.Thread(target=pi.run_localscript, name='localscript-Pi' + str(pi.id)).start()
-    time.sleep(1.5)
+    def record_from_pis(self):
+        recording_threads = []
+        for pi in self.pis:
+            thread = threading.Thread(target=pi.record, name='record-Pi' + str(pi.id))
+            thread.start()
+            recording_threads.append(thread)
+        # Wait for recording threads to finish
+        for thread in recording_threads:
+            thread.join()
 
-    for pi in pis:
-        pi.establish_connection()
+    def load_recording_from_disk(self):
+        for pi in self.pis:
+            pi.load_recording_from_disk()
 
+    def start_stream(self):
+        for pi in self.pis:
+            threading.Thread(target=pi.run_localscript, name='localscript-Pi' + str(pi.id)).start()
+        time.sleep(1.5)
 
-if __name__ == '__main__':
-    for pi_id in range(len(PI_IP_ADDRESSES)):
-        pi = Pi(pi_id, PI_IP_ADDRESSES[pi_id])
-        pi.check_time_sync()
+        for pi in self.pis:
+            pi.establish_connection()
+
+    def get_synced_multiframe(self):
+        # Get next set of frames which should be fairly in sync with each other.
+        frames = []
+        for pi in self.pis:
+            next_frame = pi.get_frame()
+            if next_frame is None:  # End of video
+                return None
+            frames.append(next_frame)
+
+        # Next part is currently only adapted to 2 Pis. If any frame is too far behind, then replace it with a new one
+        frame_drop = False
+        in_sync = False
+        while not in_sync:
+            if (frames[0].timestamp - frames[1].timestamp) > SYNC_DIFFERENCE_LIMIT:
+                frames[1] = self.pis[1].get_frame()
+                frame_drop = True
+                # print("Dropped a frame from pi1")
+            elif (frames[1].timestamp - frames[0].timestamp) > SYNC_DIFFERENCE_LIMIT:
+                frames[0] = self.pis[0].get_frame()
+                frame_drop = True
+                # print("Dropped a frame from pi0")
+            else:
+                in_sync = True
+
+        return MultiViewFrame(frames, frame_drop)
+
+    def check_time_sync(self):
+        for pi in self.pis:
+            pi.check_time_sync()
+
+    def save_and_close(self):
+        print("Saving parameters and closing connections")
+        for pi in self.pis:
+            pi.save_extrinsic_params()
+            if pi.connection is not None:
+                pi.connection.close()

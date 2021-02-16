@@ -1,36 +1,33 @@
-import video, calibrate
-import pisetup
+import process
+import frame, calibrate
+import pisystem
+
+PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
+SERVER_IP = '10.42.0.1'
 
 
 def main():
     # Create Pi objects
-    pis = []
-    for pi_id in range(len(pisetup.PI_IP_ADDRESSES)):
-        pi = pisetup.Pi(pi_id, pisetup.PI_IP_ADDRESSES[pi_id])
-        pis.append(pi)
-        pi.upload_localscripts()  # Only necessary during development
+    pisys = pisystem.PiSystem(PI_IP_ADDRESSES)
+    pisys.upload_localscripts()  # Only necessary during development
+    #pisys.check_time_sync()
 
     try:
-        if pisetup.MODE == 'record':
-            pisetup.record_from_pis(pis)
-            calibrate.calibrate_extrinsic_correspondences(pis)
-            #video.process_recording(pis)
-            #video.play_processed_recording()
+        if pisystem.MODE == 'record':
+            #pisys.record_from_pis()
+            #calibrate.calibrate_extrinsic_correspondences(pisys)
+            #process.process_recording(pisys)
+            process.play_processed_recording()
 
-        elif pisetup.MODE == 'stream':
-            pisetup.start_stream(pis)
-            calibrate.calibrate_extrinsic_chessboard(pis)
-            video.process_and_display_stream(pis)
+        elif pisystem.MODE == 'stream':
+            pisys.start_stream()
+            process.process_and_display_stream(pisys)
 
         else:
             raise RuntimeError("Mode not recognised")
 
     finally:
-        print("Saving parameters and closing connections")
-        for pi in pis:
-            pi.save_extrinsic_params()
-            if pi.connection is not None:
-                pi.connection.close()
+        pisys.save_and_close()
 
 
 if __name__ == '__main__':
