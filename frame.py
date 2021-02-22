@@ -10,8 +10,7 @@ class SingleViewFrame:
         self.frame = frame
         self.corresponding_pi = corresponding_pi
         self.timestamp = timestamp
-        # Relevant to stream mode
-        self.quick_read = quick_read
+        self.quick_read = quick_read  # Used for stream mode
 
     def copy(self):
         return SingleViewFrame(self.frame.copy(), self.corresponding_pi, self.timestamp, self.quick_read)
@@ -20,8 +19,10 @@ class SingleViewFrame:
 class MultiViewFrame:
     def __init__(self, frames, was_frame_dropped):
         self.frames = frames
-        # Properties for stream mode
-        self.was_frame_dropped = was_frame_dropped
+        self.was_frame_dropped = was_frame_dropped  # Used for for stream mode
+
+        # Tracking characteristics
+        self.spot_location_3D = None
 
     def copy(self):
         new_frames = []
@@ -35,7 +36,7 @@ class MultiViewFrame:
     def get_avg_latency(self):
         return time.time() - sum([frame.timestamp for frame in self.frames]) / len(self.frames)
 
-    def combine(self):
+    def combine_frames(self):
         """Returns concatenated image from multiple views"""
         return np.concatenate((self.frames[0].frame, self.frames[1].frame), axis=1)
 
@@ -48,8 +49,10 @@ class MultiViewFrame:
             sub_x, sub_y = x - RESOLUTION[0], y
         return sub_x, sub_y, id
 
-    def add_marker(self, frame_id, coords, colour):
+    def add_marker(self, frame_id, coords, num, colour):
         cv2.drawMarker(self.frames[frame_id].frame, coords, colour, cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=2)
+        cv2.putText(self.frames[frame_id].frame, str(num), (coords[0]+30, coords[1]),
+                    cv2.FONT_ITALIC, 1, colour, 2)
 
     def draw_axis_lines(self, frame_id, img_points):
         img_points = img_points.astype(int)
@@ -67,7 +70,20 @@ class MultiViewFrame:
                 self.draw_axis_lines(id, img_points)
 
     def triangulate_points(self, points):
+        """Triangulate 3D location from points in two images"""
         points4D = cv2.triangulatePoints(self.frames[0].corresponding_pi.P, self.frames[1].corresponding_pi.P,
                                          points[0].T, points[1].T).T
         points3D = cv2.convertPointsFromHomogeneous(points4D)
         return points3D
+
+    def process(self):
+        spot_locations = []
+        for single_frame in self.frames:
+            grey_frame = cv2.cvtColor(single_frame.frame, cv2.COLOR_BGR2GRAY)
+            blurred_frame = cv2.GaussianBlur(grey_frame, (101, 101), 0)
+            spot_location = np.unravel_index(np.argmax(blurred_frame, axis=None), blurred_frame.shape)[::-1]
+            spot_locations.append(np.float32(spot_location))
+        self.spot_location_3D = self.triangulate_points(spot_locations)
+        self.draw_axes(self.spot_location_3D)
+
+        # frame.draw_axes(np.array([[[0, 0, 500]]]))

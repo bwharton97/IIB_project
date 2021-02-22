@@ -6,7 +6,7 @@ import time
 import picamera
 
 from constants import RESOLUTION, FRAMERATE, MODE
-DURATION = 30
+DURATION = 10
 
 
 class SplitFrames(object):

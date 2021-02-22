@@ -1,5 +1,5 @@
 import process
-import frame, calibrate
+import calibrate
 import pisystem
 
 PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
@@ -15,9 +15,9 @@ def main():
     try:
         if pisystem.MODE == 'record':
             #pisys.record_from_pis()
-            #calibrate.calibrate_extrinsic_correspondences(pisys)
+            calibrate.calibrate_extrinsic_correspondences(pisys)
             #process.process_recording(pisys)
-            process.play_processed_recording()
+            #process.play_processed_recording()
 
         elif pisystem.MODE == 'stream':
             pisys.start_stream()
