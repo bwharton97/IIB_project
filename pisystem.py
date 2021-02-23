@@ -185,15 +185,16 @@ class PiSystem:
         frames = []
         for pi in self.pis:
             next_frame = pi.get_frame()
-            if next_frame is None:  # End of video
-                return None
             frames.append(next_frame)
 
         # Next part is currently only adapted to 2 Pis. If any frame is too far behind, then replace it with a new one
         frame_drop = False
         in_sync = False
         while not in_sync:
-            if (frames[0].timestamp - frames[1].timestamp) > SYNC_DIFFERENCE_LIMIT:
+            if None in frames:
+                print("Warning: end of video reached. Pi clocks could be out of sync.")
+                return None
+            elif (frames[0].timestamp - frames[1].timestamp) > SYNC_DIFFERENCE_LIMIT:
                 frames[1] = self.pis[1].get_frame()
                 frame_drop = True
                 # print("Dropped a frame from pi1")
@@ -210,9 +211,13 @@ class PiSystem:
         for pi in self.pis:
             pi.check_time_sync()
 
-    def save_and_close(self):
-        print("Saving parameters and closing connections")
+    def save_params(self):
+        print("Saving external calibration parameters")
         for pi in self.pis:
             pi.save_extrinsic_params()
+
+    def close(self):
+        print("Closing connections")
+        for pi in self.pis:
             if pi.connection is not None:
                 pi.connection.close()

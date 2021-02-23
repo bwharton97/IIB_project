@@ -15,7 +15,7 @@ def main():
     try:
         if pisystem.MODE == 'record':
             #pisys.record_from_pis()
-            calibrate.calibrate_extrinsic_correspondences(pisys)
+            calibrate.Calibrator(pisys)
             #process.process_recording(pisys)
             #process.play_processed_recording()
 
@@ -27,7 +27,7 @@ def main():
             raise RuntimeError("Mode not recognised")
 
     finally:
-        pisys.save_and_close()
+        pisys.close()
 
 
 if __name__ == '__main__':
