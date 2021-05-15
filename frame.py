@@ -19,6 +19,7 @@ class SingleViewFrame:
 class MultiViewFrame:
     def __init__(self, frames, was_frame_dropped):
         self.frames = frames
+        self.timestamp = sum([frame.timestamp for frame in frames])/len(frames)
         self.was_frame_dropped = was_frame_dropped  # Used for for stream mode
 
         # Tracking characteristics
@@ -40,7 +41,8 @@ class MultiViewFrame:
         """Returns concatenated image from multiple views"""
         return np.concatenate((self.frames[0].frame, self.frames[1].frame), axis=1)
 
-    def locate_in_combined(self, x, y):
+    @staticmethod
+    def locate_in_combined(x, y):
         if x < RESOLUTION[0]:
             id = 0
             sub_x, sub_y = x, y
@@ -76,14 +78,46 @@ class MultiViewFrame:
         points3D = cv2.convertPointsFromHomogeneous(points4D)
         return points3D
 
-    def process(self):
+    def locate_spot(self):
+        SIGMA = 15
         spot_locations = []
-        for single_frame in self.frames:
-            grey_frame = cv2.cvtColor(single_frame.frame, cv2.COLOR_BGR2GRAY)
-            blurred_frame = cv2.GaussianBlur(grey_frame, (101, 101), 0)
+        for i in range(len(self.frames)):
+            frame = self.frames[i].frame
+            #red_frame[:, :, 0] = 0
+            #red_frame[:, :, 1] = 0
+            grey_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            blurred_frame = cv2.GaussianBlur(grey_frame, (0, 0), SIGMA)
             spot_location = np.unravel_index(np.argmax(blurred_frame, axis=None), blurred_frame.shape)[::-1]
-            spot_locations.append(np.float32(spot_location))
-        self.spot_location_3D = self.triangulate_points(spot_locations)
-        self.draw_axes(self.spot_location_3D)
 
-        # frame.draw_axes(np.array([[[0, 0, 500]]]))
+            """
+            params = cv2.SimpleBlobDetector_Params()
+            params.filterByColor = True
+            params.blobColor = 255
+            params.minThreshold = 10
+            params.maxThreshold = 255
+            params.filterByArea = False
+            params.minArea = 10
+            params.maxArea = 5000
+            detector = cv2.SimpleBlobDetector_create(params)
+            keypoints = detector.detect(grey_frame)
+            print(len(keypoints))
+            # Draw detected blobs as red circles.
+            red_frame_keypoints = cv2.drawKeypoints(red_frame, keypoints, np.array([]), (255, 255, 0),
+                                                    cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            """
+
+            spot_locations.append(np.float32(spot_location))
+            cv2.circle(frame, spot_location, SIGMA, (255, 0, 0), 2)
+            self.frames[i].frame = frame
+
+        spot_location_3D = self.triangulate_points(spot_locations)
+
+        centre = np.array([[[0, 0, 0]]])
+        #self.draw_axes(centre)
+        if np.linalg.norm(spot_location_3D - centre) < 1000:
+            self.spot_location_3D = spot_location_3D
+            self.draw_axes(self.spot_location_3D)
+        else:
+            self.spot_location_3D = None
+
+

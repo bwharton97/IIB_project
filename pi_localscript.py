@@ -1,12 +1,15 @@
 """ This script along with constants.py will be pushed and run remotely on the pi."""
 import io
+import sys
 import socket
 import struct
 import time
 import picamera
 
-from constants import RESOLUTION, FRAMERATE, MODE
-DURATION = 10
+resolution = (int(sys.argv[1]), int(sys.argv[2]))
+framerate = int(sys.argv[3])
+mode = sys.argv[4]
+duration = int(sys.argv[5])
 
 
 class SplitFrames(object):
@@ -28,14 +31,14 @@ class SplitFrames(object):
                 """
                 time2=time.time()
                 writetime=time2-time1
-                if writetime>1/FRAMERATE:
+                if writetime>1/framerate:
                     print("WARNING: delay in writing:", writetime)
                 """
                 self.stream.seek(0)
         self.stream.write(buf)
 
 
-with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
+with picamera.PiCamera(resolution=resolution, framerate=framerate) as camera:
     server_socket = socket.socket()
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(('0.0.0.0', 8000))
@@ -45,7 +48,7 @@ with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
     connection = server_socket.accept()[0].makefile('wb')
     print("Pi: Connection accepted")
 
-    if MODE == 'stream':
+    if mode == 'stream':
         try:
             output = SplitFrames(connection)
             camera.start_recording(output, format='mjpeg')
@@ -59,12 +62,12 @@ with picamera.PiCamera(resolution=RESOLUTION, framerate=FRAMERATE) as camera:
                 pass
         server_socket.close()
 
-    elif MODE == 'record':
+    elif mode == 'record':
         try:
             timestamp = time.time()
             connection.write(struct.pack('<d', timestamp))
             camera.start_recording(connection, format='h264')
-            camera.wait_recording(DURATION)
+            camera.wait_recording(duration)
             camera.stop_recording()
         finally:
             connection.close()
