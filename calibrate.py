@@ -51,7 +51,7 @@ class Calibrator:
         Finds correspondences_3D"""
         # Trim correspondences
         correspondences = [view[:len(min(self.correspondences, key=len))] for view in self.correspondences]
-        if len(correspondences[0]) < 7:
+        if len(correspondences[0]) < 8:
             # Too few points
             self.correspondences_3D = None
             return False

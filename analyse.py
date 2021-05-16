@@ -34,12 +34,20 @@ class Analyser:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         x, y, z = self.data_3D[:, 0], self.data_3D[:, 2], -self.data_3D[:, 1]
-        ax.plot(x, y, z)
+        ax.plot(x, y, z, label='position')
         x2, y2, z2 = self.data_reduced_3D[:, 0], self.data_reduced_3D[:, 2], -self.data_reduced_3D[:, 1]
-        ax.plot(x2, y2, z2)
+        ax.plot(x2, y2, z2, label='projected onto principal axis')
         ax.set_xlabel("x")
         ax.set_ylabel("y - distance from Pi0")
         ax.set_zlabel("z - height")
+        max_range = np.array([x.max() - x.min(), y.max() - y.min(), z.max() - z.min()]).max() / 2.0
+        mid_x = (x.max() + x.min()) * 0.5
+        mid_y = (y.max() + y.min()) * 0.5
+        mid_z = (z.max() + z.min()) * 0.5
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        plt.legend()
         plt.show()
 
     def plot_time(self):
@@ -62,8 +70,6 @@ class Analyser:
         peaks = find_peaks_cwt(yf, widths=np.arange(1, yf.shape[0]//5)) - 1
         print("Primary frequency: {:.4f}Hz".format(xf[peaks[0]]))
         plt.plot(xf[peaks], yf[peaks], "x")
-        plt.show()
-
 
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Magnitude")
