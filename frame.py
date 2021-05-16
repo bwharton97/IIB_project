@@ -114,7 +114,7 @@ class MultiViewFrame:
 
         centre = np.array([[[0, 0, 0]]])
         #self.draw_axes(centre)
-        if np.linalg.norm(spot_location_3D - centre) < 1000:
+        if np.linalg.norm(spot_location_3D - centre) < 300:
             self.spot_location_3D = spot_location_3D
             self.draw_axes(self.spot_location_3D)
         else:

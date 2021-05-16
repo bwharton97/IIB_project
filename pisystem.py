@@ -38,6 +38,7 @@ class Pi:
             rvec = np.load('camera_params/rvec_{}.npy'.format(str(self.id)))
             tvec = np.load('camera_params/tvec_{}.npy'.format(str(self.id)))
             self.set_extrinsic_params(rvec, tvec)
+            print('INFO: loaded saved camera parameters from disk')
         except (FileNotFoundError, ValueError):
             print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(id))
 
@@ -113,7 +114,6 @@ class Pi:
         self.capture = cv2.VideoCapture(most_recent_filename)
         self.start_timestamp = float(most_recent_filename[25:-5])
         self.current_pos = 0
-        print('Loading file complete for Pi{}'.format(self.id))
 
     def get_frame(self):
         if self.connection is not None:
@@ -164,12 +164,6 @@ class PiSystem:
         # Wait for recording threads to finish
         for thread in recording_threads:
             thread.join()
-
-    """
-    def load_recording_from_disk(self):
-        for pi in self.pis:
-            pi.load_recording_from_disk()
-    """
 
     def start_stream(self):
         self.mode = 'stream'

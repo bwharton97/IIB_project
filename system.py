@@ -20,7 +20,7 @@ class System:
     def calibrate(self):
         calibrate.Calibrator(self.pisys)
 
-    def process_recording(self, max_frames_to_process):
+    def process_recording(self, max_frames_to_process=None):
         print("Processing and writing to disk...")
         fourcc = cv2.VideoWriter_fourcc(*'MJPG')
         # Beware changing FRAMERATE or RESOLUTION without recording new video
@@ -44,8 +44,10 @@ class System:
         self.analyser.set_data(spot_locations, timestamps)
 
     def analyse(self):
+        self.analyser.PCA_reduction()
         self.analyser.plot_3D()
         self.analyser.plot_time()
+        self.analyser.plot_fft()
 
     def play_processed_recording(self):
         print("Playing processed recording from disk...")

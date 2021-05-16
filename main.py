@@ -5,7 +5,7 @@ def main():
     sys = system.System()
     #sys.record(duration=10)
     #sys.calibrate()
-    #sys.process_recording(max_frames_to_process=None)
+    #sys.process_recording()
     sys.analyse()
     #sys.play_processed_recording()
     #sys.stream()
