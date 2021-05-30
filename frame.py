@@ -1,4 +1,5 @@
-"""A collection of class and functions for frames and video"""
+"""Contains the classes SingleViewFrame and MultiViewFrame, the latter can contain several of the former.
+These also contain some methods which operate on the image"""
 import cv2
 import numpy as np
 import time
@@ -17,6 +18,7 @@ class SingleViewFrame:
 
 
 class MultiViewFrame:
+    """Contains multiple SingleViewFrames (currently 2 but could be expanded)"""
     def __init__(self, frames, was_frame_dropped):
         self.frames = frames
         self.timestamp = sum([frame.timestamp for frame in frames])/len(frames)
@@ -38,11 +40,13 @@ class MultiViewFrame:
         return time.time() - sum([frame.timestamp for frame in self.frames]) / len(self.frames)
 
     def combine_frames(self):
-        """Returns concatenated image from multiple views"""
+        """Returns concatenated image from multiple views for viewing"""
         return np.concatenate((self.frames[0].frame, self.frames[1].frame), axis=1)
 
     @staticmethod
     def locate_in_combined(x, y):
+        """Takes a location in a combined image and returns the original coordinates and the id of the image it
+        came from"""
         if x < RESOLUTION[0]:
             id = 0
             sub_x, sub_y = x, y
@@ -52,6 +56,7 @@ class MultiViewFrame:
         return sub_x, sub_y, id
 
     def add_marker(self, frame_id, coords, num, colour):
+        """Draws a cross marker at the specified location in the image"""
         cv2.drawMarker(self.frames[frame_id].frame, coords, colour, cv2.MARKER_TILTED_CROSS, markerSize=50, thickness=2)
         cv2.putText(self.frames[frame_id].frame, str(num), (coords[0]+30, coords[1]),
                     cv2.FONT_ITALIC, 1, colour, 2)
@@ -63,6 +68,8 @@ class MultiViewFrame:
         cv2.line(self.frames[frame_id].frame, tuple(img_points[0, 0]), tuple(img_points[3, 0]), (0, 0, 255), 2)
 
     def draw_axes(self, points3D):
+        """Projects and draws basis vectors onto all views, using the 3D coordinates of the points and the calibration
+        information"""
         for point in points3D:
             axis = point[0] + np.array([[0, 0, 0], [10, 0, 0], [0, 10, 0], [0, 0, 10]]).astype(float)
 
@@ -72,19 +79,18 @@ class MultiViewFrame:
                 self.draw_axis_lines(id, img_points)
 
     def triangulate_points(self, points):
-        """Triangulate 3D location from points in two images"""
+        """Triangulate 3D location from points in two images. Would get more complicated if expanded to more views"""
         points4D = cv2.triangulatePoints(self.frames[0].corresponding_pi.P, self.frames[1].corresponding_pi.P,
                                          points[0].T, points[1].T).T
         points3D = cv2.convertPointsFromHomogeneous(points4D)
         return points3D
 
     def locate_spot(self):
+        """Locates the brightest spot in the image and saves it to spot_location_3D"""
         SIGMA = 15
         spot_locations = []
         for i in range(len(self.frames)):
             frame = self.frames[i].frame
-            #red_frame[:, :, 0] = 0
-            #red_frame[:, :, 1] = 0
             grey_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             blurred_frame = cv2.GaussianBlur(grey_frame, (0, 0), SIGMA)
             spot_location = np.unravel_index(np.argmax(blurred_frame, axis=None), blurred_frame.shape)[::-1]

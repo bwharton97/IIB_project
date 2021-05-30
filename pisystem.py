@@ -61,7 +61,7 @@ class Pi:
         self.E = np.matmul(Tx, R)
 
     def check_time_sync(self):
-        print('\nAttempting to determine Pi{} sync status:'.format(self.id))
+        print('\nPi{} sync status:'.format(self.id))
         try:
             sp.run(['ssh', 'pi@' + self.ip_address, 'sudo', 'ntpq', '-p'], timeout=3, check=True)
         except:
@@ -124,7 +124,7 @@ class Pi:
             buffer = self.connection.read(frame_len)
             time2 = time.time()
             frame = cv2.imdecode(np.frombuffer(buffer, np.uint8), 1)  # This is operation that is problematically slow
-            time3 = time.time()
+            #time3 = time.time()
             #print('Reading took {:.0f}% of frame period, decoding took {:.0f}%'.format((time2-time1)*FRAMERATE*100,
             #                                                                           (time3-time2)*FRAMERATE*100))
             quick_read = time2-time1 < 0.0003  # If read instant then buffer has data waiting, this is bad
@@ -198,17 +198,18 @@ class PiSystem:
             elif (frames[0].timestamp - frames[1].timestamp) > sync_difference_limit:
                 frames[1] = self.pis[1].get_frame()
                 frame_drop = True
-                # print("Dropped a frame from pi1")
+                #print("Dropped a frame from pi1")
             elif (frames[1].timestamp - frames[0].timestamp) > sync_difference_limit:
                 frames[0] = self.pis[0].get_frame()
                 frame_drop = True
-                # print("Dropped a frame from pi0")
+                #print("Dropped a frame from pi0")
             else:
                 in_sync = True
 
         return MultiViewFrame(frames, frame_drop)
 
     def check_time_sync(self):
+        print("Checking Pi sync status. The host should be labelled with a * and the offset <10 (ms)")
         for pi in self.pis:
             pi.check_time_sync()
 

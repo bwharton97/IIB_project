@@ -25,7 +25,7 @@ class Analyser:
         np.save('processed_data/spot_locations.npy', self.data_3D)
         np.save('processed_data/timestamps.npy', self.timestamps)
 
-    def PCA_reduction(self):
+    def PCA_reduce(self):
         model = PCA(n_components=1)
         self.data_reduced = model.fit_transform(self.data_3D)
         self.data_reduced_3D = model.inverse_transform(self.data_reduced)
@@ -68,7 +68,7 @@ class Analyser:
         ax.plot(xf, yf)
 
         peaks = find_peaks_cwt(yf, widths=np.arange(1, yf.shape[0]//5)) - 1
-        print("Primary frequency: {:.4f}Hz".format(xf[peaks[0]]))
+        print("First peak detected at frequency: {:.4f}Hz".format(xf[peaks[0]]))
         plt.plot(xf[peaks], yf[peaks], "x")
 
         ax.set_xlabel("Frequency (Hz)")

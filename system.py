@@ -1,5 +1,5 @@
+"""The class System contains the high-level functions and interfaces with the other classes"""
 import cv2
-
 import calibrate
 import pisystem
 import analyse
@@ -11,8 +11,8 @@ class System:
     def __init__(self):
         self.pisys = pisystem.PiSystem(PI_IP_ADDRESSES)
         self.analyser = analyse.Analyser()
-        # self.pisys.upload_localscripts()  # Only necessary during development
-        # self.pisys.check_time_sync()
+        #self.pisys.upload_localscripts()  # Only necessary during development
+        self.pisys.check_time_sync()  # Only necessary for diagnostics
 
     def record(self, duration):
         self.pisys.record(duration)
@@ -44,7 +44,7 @@ class System:
         self.analyser.set_data(spot_locations, timestamps)
 
     def analyse(self):
-        self.analyser.PCA_reduction()
+        self.analyser.PCA_reduce()
         self.analyser.plot_3D()
         self.analyser.plot_time()
         self.analyser.plot_fft()
@@ -89,7 +89,7 @@ class System:
                     count, dropped_frames, quick_reads, sum_latency = 0, 0, 0, 0
 
                 # Process frame
-                frame.locate_spot()
+                #frame.locate_spot()
 
                 # Show image
                 cv2.imshow("Processed stream", frame.combine_frames())

@@ -1,11 +1,12 @@
-""" This script along with constants.py will be pushed and run remotely on the pi."""
+""" This script will be pushed and run remotely on the pi, using Pi.run_localscript()"""
 import io
 import sys
 import socket
 import struct
 import time
-import picamera
+import picamera  # This package must be installed on the Pi but not on the server
 
+# Interpret command-line parameters from server
 resolution = (int(sys.argv[1]), int(sys.argv[2]))
 framerate = int(sys.argv[3])
 mode = sys.argv[4]
@@ -67,6 +68,7 @@ with picamera.PiCamera(resolution=resolution, framerate=framerate) as camera:
             timestamp = time.time()
             connection.write(struct.pack('<d', timestamp))
             camera.start_recording(connection, format='h264')
+            print(camera.frame)
             camera.wait_recording(duration)
             camera.stop_recording()
         finally:

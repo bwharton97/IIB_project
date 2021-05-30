@@ -3,11 +3,11 @@ import system
 
 def main():
     sys = system.System()
-    sys.record(duration=10)
-    #sys.calibrate()
-    sys.process_recording(max_frames_to_process=None)
-    sys.analyse()
-    sys.play_processed_recording()
+    sys.record(duration=20)
+    sys.calibrate()
+    #sys.process_recording(max_frames_to_process=None)
+    #sys.analyse()
+    #sys.play_processed_recording()
     #sys.stream()
 
 

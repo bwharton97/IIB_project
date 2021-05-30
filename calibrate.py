@@ -1,3 +1,4 @@
+"""Contains class Calibrator which manages the process of determining extrinsic camera params."""
 import cv2
 import numpy as np
 
@@ -17,6 +18,7 @@ class Calibrator:
         self.selection_loop()
 
     def redraw(self):
+        """Refresh the image to account for changed correspondences, and attempt a calibration"""
         self.drawing_frame = self.original_frame.copy()
         self.draw_correspondence_markers()
         ret = self.calibrate()
@@ -77,7 +79,7 @@ class Calibrator:
             print(points_homo)
             print(F)
 
-        # Recover pose and calibrate pis
+        # Recover pose and calibrate pis. Assumes Pis have same camera matrix K
         K = self.pisys.pis[0].K
         E = np.matmul(K.T, np.matmul(F, K))
         retval, R, tvec, pose_mask = cv2.recoverPose(E, points[0], points[1], K)
@@ -98,6 +100,8 @@ class Calibrator:
         print("Correspondences in 3D:\n", self.correspondences_3D.reshape((-1, 3)))
         print("Vector between cameras:", self.pisys.pis[1].tvec.flatten())
         print("Distance between cameras:", np.linalg.norm(self.pisys.pis[1].tvec))
+        print("Distance between points 2 and 3:", np.linalg.norm(self.correspondences_3D.reshape((-1, 3))[2]
+                                                                 - self.correspondences_3D.reshape((-1, 3))[3]))
         return True
 
     def selection_loop(self):
