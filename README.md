@@ -86,7 +86,7 @@ the resulting object-oriented code was much more efficient in terms of code line
 number of variables passed as arguments to functions (because the arguments became
 attributes of the class).
 
-![](images/UML structure diagram.png)
+![](images/UML_structure_diagram.png)
 
 UML class diagram of the software, showing the main classes, their principal attributes and
 methods, and their associations.
