@@ -1,9 +1,10 @@
+"""Contains class Analyser which performs interesting analysis on the measured location of the spot through time"""
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
 from scipy.fft import fft, fftfreq
 from scipy.signal import find_peaks_cwt
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D  # Pycharm think this is unused but it is necessary
 
 
 class Analyser:

@@ -1,4 +1,5 @@
 """Constants that must be shared between sever and pi scripts"""
+
 PI_IP_ADDRESSES = ['10.42.0.171', '10.42.0.239']
 SERVER_IP = '10.42.0.1'  # Not used, just useful to know
 # Be careful of changing resolution or framerate and loading old video

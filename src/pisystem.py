@@ -8,8 +8,8 @@ import glob
 import cv2
 import numpy as np
 
-from constants import RESOLUTION, FRAMERATE
-from frame import SingleViewFrame, MultiViewFrame
+from constants.constants import RESOLUTION, FRAMERATE
+from src.frame import SingleViewFrame, MultiViewFrame
 
 
 class Pi:
@@ -38,7 +38,7 @@ class Pi:
             rvec = np.load('camera_params/rvec_{}.npy'.format(str(self.id)))
             tvec = np.load('camera_params/tvec_{}.npy'.format(str(self.id)))
             self.set_extrinsic_params(rvec, tvec)
-            #print('INFO: loaded saved camera parameters from disk')
+            print('INFO: loaded saved camera parameters from disk')
         except (FileNotFoundError, ValueError):
             print('WARNING: Cannot load extrinsic parameters for Pi{}. Please recalibrate'.format(id))
 

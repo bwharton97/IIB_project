@@ -1,0 +1,6 @@
+matplotlib
+numpy
+scikit-learn
+opencv-python
+scipy
+# Package picamera must be installed on the raspberry pi but not necessarily on the server

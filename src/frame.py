@@ -3,7 +3,7 @@ These also contain some methods which operate on the image"""
 import cv2
 import numpy as np
 import time
-from constants import RESOLUTION
+from constants.constants import RESOLUTION
 
 
 class SingleViewFrame:
@@ -94,24 +94,6 @@ class MultiViewFrame:
             grey_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             blurred_frame = cv2.GaussianBlur(grey_frame, (0, 0), SIGMA)
             spot_location = np.unravel_index(np.argmax(blurred_frame, axis=None), blurred_frame.shape)[::-1]
-
-            """
-            params = cv2.SimpleBlobDetector_Params()
-            params.filterByColor = True
-            params.blobColor = 255
-            params.minThreshold = 10
-            params.maxThreshold = 255
-            params.filterByArea = False
-            params.minArea = 10
-            params.maxArea = 5000
-            detector = cv2.SimpleBlobDetector_create(params)
-            keypoints = detector.detect(grey_frame)
-            print(len(keypoints))
-            # Draw detected blobs as red circles.
-            red_frame_keypoints = cv2.drawKeypoints(red_frame, keypoints, np.array([]), (255, 255, 0),
-                                                    cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            """
-
             spot_locations.append(np.float32(spot_location))
             cv2.circle(frame, spot_location, SIGMA, (255, 0, 0), 2)
             self.frames[i].frame = frame

@@ -1,16 +1,16 @@
 """The class System contains the high-level functions and interfaces with the other classes"""
 import cv2
-import calibrate
-import pisystem
-import analyse
 
-from constants import PI_IP_ADDRESSES, RESOLUTION, FRAMERATE, STAT_FREQ
+from src.calibrate import Calibrator
+from src.pisystem import PiSystem
+from src.analyse import Analyser
+from constants.constants import PI_IP_ADDRESSES, RESOLUTION, FRAMERATE, STAT_FREQ
 
 
 class System:
     def __init__(self):
-        self.pisys = pisystem.PiSystem(PI_IP_ADDRESSES)
-        self.analyser = analyse.Analyser()
+        self.pisys = PiSystem(PI_IP_ADDRESSES)
+        self.analyser = Analyser()
         #self.pisys.upload_localscripts()  # Only necessary during development
         self.pisys.check_time_sync()  # Only necessary for diagnostics
 
@@ -18,7 +18,7 @@ class System:
         self.pisys.record(duration)
 
     def calibrate(self):
-        calibrate.Calibrator(self.pisys)
+        Calibrator(self.pisys)
 
     def process_recording(self, max_frames_to_process=None):
         print("Processing and writing to disk...")
@@ -44,6 +44,8 @@ class System:
         self.analyser.set_data(spot_locations, timestamps)
 
     def analyse(self):
+        """Performs various analysis on the measured locations of the spot"""
+
         self.analyser.PCA_reduce()
         self.analyser.plot_3D()
         self.analyser.plot_time()
@@ -67,6 +69,7 @@ class System:
             print("Error opening or playing processed file")
 
     def stream(self):
+        """Attempt to record, process and display the frame in real time"""
         try:
             self.pisys.start_stream()
 
